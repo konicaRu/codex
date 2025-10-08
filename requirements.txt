@@ -10,3 +10,4 @@ python-pptx
 faster-whisper
 pydub
 requests
+Flask
