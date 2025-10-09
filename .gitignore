@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+/temp/
+/reports/
+/logs/
+/uploads/

@@ -1,0 +1,44 @@
+# Default configuration for the video minutes generator
+paths:
+  ffmpeg: "ffmpeg"  # assumes ffmpeg is available in PATH
+  tesseract: "tesseract"  # assumes Tesseract OCR in PATH
+  temp_dir: "temp"
+
+video:
+  min_segment_duration: 4.0  # seconds
+  max_segment_duration: 180.0
+  histogram_threshold: 0.35
+  ssim_threshold: 0.65
+  frame_sample_rate: 1.0  # seconds
+  max_slides: null
+
+ocr:
+  lang: "rus+eng"
+  psm: 6
+  oem: 3
+
+asr:
+  model_size: "base"
+  device: "auto"  # "cpu" or "cuda"
+  compute_type: "int8_float16"
+
+llm:
+  api_base: null  # falls back to OPENAI_API_BASE or http://localhost:1234/v1
+  model: "qwen2.5-7b-instruct"
+  max_retries: 3
+  temperature: 0.2
+  summary_prompt: |
+    Ты — внимательный ассистент, делающий отчёт по встрече. Используй текст с экрана и транскрипт речи.
+    Верни JSON вида {"title": str, "bullets": [str, ...]}. Заголовок до 12 слов.
+  cluster_prompt: |
+    Сгруппируй сегменты встречи по темам. Верни JSON с полями "topics" (список названий тем)
+    и "summary" (краткое описание общей канвы встречи).
+  action_prompt: |
+    Сформулируй список экшенов/решений/следующих шагов. Верни JSON с полем "actions" — список строк.
+  minutes_prompt: |
+    Составь краткий общий отчёт встречи в 3–5 буллетов. Верни JSON с полем "bullets" — список строк.
+
+output:
+  format: "pdf"
+  max_slides: null
+

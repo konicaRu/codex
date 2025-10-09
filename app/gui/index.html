@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <title>Видео → Отчёт</title>
+    <style>
+        :root {
+            color-scheme: light dark;
+            font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background: #f2f4f8;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+        }
+        .container {
+            background: #ffffff;
+            margin: 32px auto;
+            padding: 32px;
+            border-radius: 16px;
+            max-width: 720px;
+            width: 100%;
+            box-shadow: 0 16px 40px rgba(23, 43, 77, 0.1);
+        }
+        h1 {
+            margin-top: 0;
+            text-align: center;
+            color: #0b3d91;
+        }
+        .status {
+            border: 1px solid #d0d7de;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 24px;
+            background: #f8fafc;
+        }
+        .status h2 {
+            margin: 0 0 12px;
+            font-size: 18px;
+        }
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-top: 1px solid #e5eaf1;
+        }
+        .status-item:first-of-type {
+            border-top: none;
+        }
+        .status-item span {
+            font-weight: 600;
+        }
+        .status-item.ok span {
+            color: #117a65;
+        }
+        .status-item.fail span {
+            color: #c0392b;
+        }
+        .hint {
+            font-size: 13px;
+            color: #5d6d7e;
+        }
+        form {
+            display: grid;
+            gap: 16px;
+        }
+        label {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            font-weight: 600;
+        }
+        input[type="file"], select, input[type="text"], input[type="number"] {
+            padding: 10px 12px;
+            border: 1px solid #c7d0e1;
+            border-radius: 8px;
+            font-size: 15px;
+        }
+        button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            background: linear-gradient(135deg, #0b3d91, #1abc9c);
+            color: #fff;
+            cursor: pointer;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        button:not(:disabled):hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 18px rgba(11, 61, 145, 0.25);
+        }
+        .log {
+            border: 1px dashed #b0bec5;
+            padding: 16px;
+            border-radius: 10px;
+            background: #fbfdff;
+            white-space: pre-wrap;
+            font-size: 14px;
+        }
+        .results a {
+            display: inline-block;
+            margin-right: 12px;
+            margin-top: 8px;
+            color: #0b3d91;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .error {
+            color: #c0392b;
+            font-weight: 600;
+        }
+        .success {
+            color: #117a65;
+            font-weight: 600;
+        }
+        footer {
+            margin-top: 32px;
+            font-size: 13px;
+            color: #7f8c8d;
+            text-align: center;
+        }
+        @media (max-width: 640px) {
+            .container {
+                margin: 16px;
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Оффлайн отчёт по встрече</h1>
+        <div id="status" class="status">
+            <h2>Проверка окружения</h2>
+            <div id="status-body">Идёт проверка…</div>
+        </div>
+        <form id="process-form">
+            <label>Видео-файл (MP4/MKV/MOV)
+                <input type="file" name="file" accept="video/mp4,video/x-matroska,video/quicktime" required />
+            </label>
+            <label>Формат отчёта
+                <select name="format">
+                    <option value="pdf">PDF</option>
+                    <option value="pptx">PPTX</option>
+                </select>
+            </label>
+            <label>Лимит слайдов (опционально)
+                <input type="number" name="maxSlides" min="1" placeholder="например, 30" />
+            </label>
+            <label>Языки OCR/ASR
+                <input type="text" name="lang" value="ru+en" />
+            </label>
+            <label>Модель LLM (если нужно переопределить)
+                <input type="text" name="model" placeholder="например, qwen2.5-7b-instruct" />
+            </label>
+            <button type="submit">Собрать отчёт</button>
+        </form>
+        <div id="log" class="log" hidden></div>
+        <div id="results" class="results"></div>
+        <footer>
+            1. Запустите сервер: <code>python -m app.gui_server</code>.<br />
+            2. Убедитесь, что LM Studio активен с моделью и OpenAI API.
+        </footer>
+    </div>
+
+    <script>
+        const statusContainer = document.getElementById('status-body');
+        const form = document.getElementById('process-form');
+        const logBox = document.getElementById('log');
+        const resultsBox = document.getElementById('results');
+
+        function renderStatus(data) {
+            if (!data.ok) {
+                statusContainer.innerHTML = `<div class="error">${data.message}</div>`;
+                return;
+            }
+            const rows = Object.entries(data.environment).map(([key, value]) => {
+                const css = value.ok ? 'status-item ok' : 'status-item fail';
+                const hint = value.message ? `<div class="hint">${value.message}</div>` : '';
+                const label = {
+                    ffmpeg: 'ffmpeg',
+                    tesseract: 'Tesseract',
+                    lm_studio: 'LM Studio API',
+                    model: 'Модель LLM',
+                }[key] || key;
+                return `<div class="${css}"><span>${label}</span><div>${value.ok ? 'Готово' : 'Нужно действие'}</div>${hint}</div>`;
+            });
+            statusContainer.innerHTML = rows.join('');
+        }
+
+        async function loadStatus() {
+            try {
+                const response = await fetch('http://localhost:5000/api/status');
+                if (!response.ok) {
+                    throw new Error(`Сервер вернул ${response.status}`);
+                }
+                const data = await response.json();
+                renderStatus(data);
+            } catch (error) {
+                statusContainer.innerHTML = `<div class="error">Не удаётся подключиться к серверу GUI.<br />` +
+                    `Запустите <code>python -m app.gui_server</code> и обновите страницу.<br />` +
+                    `Подробности: ${error}</div>`;
+            }
+        }
+
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            resultsBox.innerHTML = '';
+            logBox.hidden = false;
+            logBox.textContent = 'Обработка запущена…';
+            logBox.classList.remove('error');
+            logBox.classList.remove('success');
+
+            const submitButton = form.querySelector('button');
+            submitButton.disabled = true;
+
+            const formData = new FormData(form);
+            try {
+                const response = await fetch('http://localhost:5000/api/process', {
+                    method: 'POST',
+                    body: formData,
+                });
+                const data = await response.json();
+                if (!response.ok || !data.ok) {
+                    throw new Error(data.message || 'Неизвестная ошибка сервера');
+                }
+                logBox.textContent = 'Готово! Отчёт собран.';
+                logBox.classList.add('success');
+                const links = [];
+                if (data.report_url) {
+                    links.push(`<a href="http://localhost:5000${data.report_url}" target="_blank">Скачать отчёт</a>`);
+                }
+                if (data.log_url) {
+                    links.push(`<a href="http://localhost:5000${data.log_url}" target="_blank">Скачать JSON-лог</a>`);
+                }
+                resultsBox.innerHTML = links.join('');
+            } catch (error) {
+                logBox.textContent = `Ошибка: ${error.message}`;
+                logBox.classList.add('error');
+            } finally {
+                form.reset();
+                submitButton.disabled = false;
+            }
+        });
+
+        loadStatus();
+    </script>
+</body>
+</html>
